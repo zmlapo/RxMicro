@@ -28,33 +28,81 @@ class OzeDataset(Dataset):
 
     def __init__(self,
                  dataset_path: str,
-                 labels_path: Optional[str] = "labels.json",
-                 normalize: Optional[str] = "max",
+                 labels_path: str,
                  **kwargs):
         """Load dataset from npz."""
         super().__init__(**kwargs)
-
-        self._normalize = normalize
 
         self._load_txt(dataset_path, labels_path)
 
     def _load_txt(self, dataset_path, labels_path):
         # Load dataset as csv
-        dataset = np.load(dataset_path)
-        data_dict = dict()
+        data_arr = []
+        global_min = 0
+        global_max = 0
+        num_services = 0
         for filename in os.listdir(dataset_path):
             data_path = os.path.join(dataset_path, filename)
-            data_dict[filename] = np.loadtxt(data_path, ncols=(4, 5))
-        
+            data = np.loadtxt(data_path, usecols=(4, 5))
+            uniques = np.unique(data[:, 0], return_counts=True)[1]
+            times = np.unique(data[:, 0], return_counts=True)[0]
+
+            if global_min > min(times) or global_min == 0:
+                global_min = min(times)
+            if global_max < max(times) or global_max == 0:
+                global_max = max(times)
+
+            cumulative = np.cumsum(uniques)
+            split_values = np.split(data[:, 1], cumulative[:-1])
+            split_values_averaged = [sum(vals)/len(vals) for vals in split_values]
+            latencies_by_second = np.column_stack((times, split_values_averaged))
+            latencies_by_second = self._normalize(latencies_by_second)
+            data_arr.append(latencies_by_second)
+            num_services += 1
+            
+        data_master = self._construct_master(global_min, global_max, num_services, data_arr)
+
+
         labels_dict = dict()
         for filename in os.listdir(labels_path):
             labels_path = os.path.join(labels_path, filename)
-            labels_dict[filename] = np.loadtxt(labels_path, ncols=(3, 4, 5))
-        
-        
+            labels = np.loadtxt(labels_path, usecols=(4, 5, 6))
+            labels = self._normalize(labels)
+            uniques = np.unique(labels[:, 0], return_counts=True)[1]
+            times = np.unique(labels[:, 0], return_counts=True)[0]
+            cumulative = np.cumsum(uniques)
+            split_values = np.split(labels[:, 1:], cumulative[:-1])
+            windows_by_second = list(zip(times, split_values))
+            labels_dict[labels_path] = windows_by_second
+
         # Convert to float32
         self._x = torch.Tensor(self._x)
         self._y = torch.Tensor(self._y)
+
+
+    def _construct_master(self, global_min, global_max, num_services, data_arr):
+        time_range = [[] for i in range(global_min, global_max)]
+        for i in range(num_services):
+            serv_data = data_arr[i]
+            for j in range(global_min, global_max):
+                if j in serv_data[:, 0]:
+                    idx = serv_data[:, 0].index(j)
+                    time_range[global_max - j].append(serv_data[idx, 1])
+                else: 
+                    time_range[global_max - j].append(0)
+
+        return time_range
+
+
+    def _normalize(self, data):
+        times = [int(x[0]) for x in data]
+        for i in range(1, data.shape[1]):
+            col = data[:, i]
+            mean = np.mean(col)
+            std = np.std(col)
+            values = (col - mean) / (std + np.finfo(float).eps)
+            times = np.column_stack((times, values))
+        return times
 
     def rescale(self,
                 y: np.ndarray,
@@ -84,55 +132,3 @@ class OzeDataset(Dataset):
     def __len__(self):
         return self._x.shape[0]
 
-
-class OzeDatasetWindow(OzeDataset):
-    """Torch dataset with windowed time dimension.
-    Load dataset from a single npz file.
-    Attributes
-    ----------
-    labels: :py:class:`dict`
-        Ordered labels list for R, Z and X.
-    Parameters
-    ---------
-    dataset_x:
-        Path to the dataset inputs as npz.
-    labels_path:
-        Path to the labels, divided in R, Z and X, in json format.
-        Default is "labels.json".
-    window_size:
-        Size of the window to apply on time dimension.
-        Default 5.
-    padding:
-        Padding size to apply on time dimension windowing.
-        Default 1.
-    """
-
-    def __init__(self,
-                 dataset_path: str,
-                 labels_path: Optional[str] = "labels.json",
-                 window_size: Optional[int] = 5,
-                 padding: Optional[int] = 1,
-                 **kwargs):
-        """Load dataset from npz."""
-        super().__init__(dataset_path, labels_path, **kwargs)
-
-        self._window_dataset(window_size=window_size, padding=padding)
-
-    def _window_dataset(self, window_size=5, padding=1):
-        m, K, d_input = self._x.shape
-        _, _, d_output = self._y.shape
-
-        step = window_size - 2 * padding
-        n_step = (K - window_size - 1) // step + 1
-
-        dataset_x = np.empty(
-            (m, n_step, window_size, d_input), dtype=np.float32)
-        dataset_y = np.empty((m, n_step, step, d_output), dtype=np.float32)
-
-        for idx_step, idx in enumerate(range(0, K-window_size, step)):
-            dataset_x[:, idx_step, :, :] = self._x[:, idx:idx+window_size, :]
-            dataset_y[:, idx_step, :, :] = self._y[:,
-                                                   idx+padding:idx+window_size-padding, :]
-
-        self._x = dataset_x
-        self._y = dataset_y
