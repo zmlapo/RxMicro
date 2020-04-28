@@ -4,16 +4,18 @@ from typing import Optional
 import numpy as np
 from torch.utils.data import Dataset
 import torch
-import os
 
 
 class OzeDataset(Dataset):
     """Torch dataset for Oze datachallenge.
+
     Load dataset from a single npz file.
+
     Attributes
     ----------
     labels: :py:class:`dict`
         Ordered labels list for R, Z and X.
+
     Parameters
     ---------
     dataset_path:
@@ -36,22 +38,52 @@ class OzeDataset(Dataset):
 
         self._normalize = normalize
 
-        self._load_txt(dataset_path, labels_path)
+        self._load_npz(dataset_path, labels_path)
 
-    def _load_txt(self, dataset_path, labels_path):
+    def _load_npz(self, dataset_path, labels_path):
         # Load dataset as csv
         dataset = np.load(dataset_path)
-        data_dict = dict()
-        for filename in os.listdir(dataset_path):
-            data_path = os.path.join(dataset_path, filename)
-            data_dict[filename] = np.loadtxt(data_path, ncols=(4, 5))
-        
-        labels_dict = dict()
-        for filename in os.listdir(labels_path):
-            labels_path = os.path.join(labels_path, filename)
-            labels_dict[filename] = np.loadtxt(labels_path, ncols=(3, 4, 5))
-        
-        
+
+        # Load labels, can be found through csv or challenge description
+        with open(labels_path, "r") as stream_json:
+            self.labels = json.load(stream_json)
+
+        R = dataset['R'].astype(np.float32)
+        X = dataset['X'].astype(np.float32)
+        Z = dataset['Z'].astype(np.float32)
+
+        m = Z.shape[0]  # Number of training example
+        K = Z.shape[-1]  # Time serie length
+
+        R = np.tile(R[:, np.newaxis, :], (1, K, 1))
+        Z = Z.transpose((0, 2, 1))
+        X = X.transpose((0, 2, 1))
+
+        # Store R, Z and X as x and y
+        self._x = np.concatenate([Z, R], axis=-1)
+        self._y = X
+
+        # Normalize
+        if self._normalize == "mean":
+            mean = np.mean(self._x, axis=(0, 1))
+            std = np.std(self._x, axis=(0, 1))
+            self._x = (self._x - mean) / (std + np.finfo(float).eps)
+
+            self._mean = np.mean(self._y, axis=(0, 1))
+            self._std = np.std(self._y, axis=(0, 1))
+            self._y = (self._y - self._mean) / (self._std + np.finfo(float).eps)
+        elif self._normalize == "max":
+            M = np.max(self._x, axis=(0, 1))
+            m = np.min(self._x, axis=(0, 1))
+            self._x = (self._x - m) / (M - m + np.finfo(float).eps)
+
+            self._M = np.max(self._y, axis=(0, 1))
+            self._m = np.min(self._y, axis=(0, 1))
+            self._y = (self._y - self._m) / (self._M - self._m + np.finfo(float).eps)
+        else:
+            raise(
+                NameError(f'Normalize method "{self._normalize}" not understood.'))
+
         # Convert to float32
         self._x = torch.Tensor(self._x)
         self._y = torch.Tensor(self._y)
@@ -60,6 +92,7 @@ class OzeDataset(Dataset):
                 y: np.ndarray,
                 idx_label: int) -> torch.Tensor:
         """Rescale output from initial normalization.
+
         Arguments
         ---------
         y:
@@ -87,11 +120,14 @@ class OzeDataset(Dataset):
 
 class OzeDatasetWindow(OzeDataset):
     """Torch dataset with windowed time dimension.
+
     Load dataset from a single npz file.
+
     Attributes
     ----------
     labels: :py:class:`dict`
         Ordered labels list for R, Z and X.
+
     Parameters
     ---------
     dataset_x:

@@ -14,7 +14,7 @@ from tst.loss import OZELoss
 
 from src.dataset import OzeDataset
 from src.utils import compute_loss
-from src.utils.visualization import plot_error, plot_values, visual_sample
+from src.visualization.plot_functions import plot_error_distribution, plot_values_distribution, plot_visual_sample
 
 
 # Training parameters
