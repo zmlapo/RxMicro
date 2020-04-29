@@ -1,4 +1,4 @@
-import json
+`import json
 from typing import Optional
 
 import numpy as np
@@ -63,24 +63,38 @@ class OzeDataset(Dataset):
         data_master = self._construct_master(global_min, global_max, num_services, data_arr)
 
 
-        labels_dict = dict()
+        labels_arr = []
         for filename in os.listdir(labels_path):
             labels_path = os.path.join(labels_path, filename)
-            labels = np.loadtxt(labels_path, usecols=(4, 5, 6))
-            labels = self._normalize(labels)
+            labels = np.loadtxt(data_path, usecols=(4, 5, 6))
             uniques = np.unique(labels[:, 0], return_counts=True)[1]
             times = np.unique(labels[:, 0], return_counts=True)[0]
+
+            ### We don't want to recalculate min and max here. Not necessary
+
+            ### if global_min > min(times) or global_min == 0:
+            ###     global_min = min(times)
+            ### if global_max < max(times) or global_max == 0:
+            ###     global_max = max(times)
+
             cumulative = np.cumsum(uniques)
-            split_values = np.split(labels[:, 1:], cumulative[:-1])
-            windows_by_second = list(zip(times, split_values))
-            labels_dict[labels_path] = windows_by_second
+            congested_split_values = np.split(labels[:, 1], cumulative[:-1])
+            receiver_split_values = np.split(labels:, 2], cumulative[:-1])
+            congested_split_values_avg = [sum(vals)/len(vals) for vals in congested_split_values]
+            receiver_split_values_avg = [sum(vals)/len(vals) for vals in receiver_split_values]
+            receiver_by_second = np.column_stack((times, congested_split_values_avg))
+            congested_and_receiver_by_second = p.column_stack((receiver_by_second, receiver_split_values_avg))
+            labels_by_second_normalized = self._normalize(congested_and_receiver_by_second)
+            labels_arr.append(labels_by_second_normalized)
+            
+        label_master = self._construct_master(global_min, global_max, num_services, data_arr)
 
         # Convert to float32
-        self._x = torch.Tensor(self._x)
-        self._y = torch.Tensor(self._y)
+        self._x = torch.Tensor(data_master)
+        self._y = torch.Tensor(label_master)
 
 
-    def _construct_master(self, global_min, global_max, num_services, data_arr):
+    def _construct_master(self, global_min, global_max, num_services, data_arr, labels):
         time_range = [[] for i in range(global_min, global_max)]
         for i in range(num_services):
             serv_data = data_arr[i]
@@ -88,14 +102,21 @@ class OzeDataset(Dataset):
                 if j in serv_data[:, 0]:
                     idx = serv_data[:, 0].index(j)
                     time_range[global_max - j].append(serv_data[idx, 1])
+                    ### Second value representing Receiver Window
+                    if labels:
+                        time_range[global_max - j].append(serv_data[idx, 2])
                 else: 
                     time_range[global_max - j].append(0)
+                    ### Second 0 representing Receiver Window
+                    if labels:
+                        time_range[global_max - j].append(0)
 
         return time_range
 
 
     def _normalize(self, data):
         times = [int(x[0]) for x in data]
+        ### This can already handle multiple columns
         for i in range(1, data.shape[1]):
             col = data[:, i]
             mean = np.mean(col)
@@ -132,3 +153,4 @@ class OzeDataset(Dataset):
     def __len__(self):
         return self._x.shape[0]
 
+`
