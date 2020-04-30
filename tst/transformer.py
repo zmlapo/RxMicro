@@ -3,6 +3,7 @@ import torch.nn as nn
 
 from tst.encoder import Encoder
 from tst.decoder import Decoder
+from conv.cnn import ConvNet
 from tst.utils import generate_original_PE, generate_regular_PE
 
 
@@ -67,6 +68,7 @@ class Transformer(nn.Module):
 
         self._d_model = d_model
 
+        self._conv = ConvNet()
         self.layers_encoding = nn.ModuleList([Encoder(d_model,
                                                       q,
                                                       v,
@@ -81,7 +83,6 @@ class Transformer(nn.Module):
                                                       attention_size=attention_size,
                                                       dropout=dropout,
                                                       chunk_mode=chunk_mode) for _ in range(N)])
-
         self._embedding = nn.Linear(d_input, d_model)
         self._linear = nn.Linear(d_model, d_output)
 

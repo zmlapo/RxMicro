@@ -10,9 +10,8 @@ from tqdm import tqdm
 import seaborn as sns
 
 from tst import Transformer
-from tst.loss import OZELoss
 
-from src.dataset import OzeDataset
+from src.dataset import MicroservicesDataset
 from src.utils import compute_loss
 from src.visualization.plot_functions import plot_error_distribution, plot_values_distribution, plot_visual_sample
 
@@ -26,7 +25,6 @@ EPOCHS = 30
 
 
 def LoadDataset():
-    #ozeDataset = OzeDataset(DATASET_PATH)
     microservicesDataset = MicroservicesDataset(DATASET_PATH)
 
     dataset_train, dataset_val, dataset_test = random_split(microservicesDataset, (38000, 1000, 1000))
@@ -50,10 +48,10 @@ def LoadDataset():
                                 num_workers=NUM_WORKERS
                                 )
 
-    return dataloader_train, dataloader_val, dataloader_test
+    return dataloader_train, dataloader_val, dataloader_test, microservicesDataset.get_service_count()
 
 
-def LoadNetwork():
+def LoadNetwork(service_count):
     # Model parameters
     d_model = 48 # Latent dim
     q = 8 # Query size
@@ -65,17 +63,18 @@ def LoadNetwork():
     pe = None # Positional encoding
     chunk_mode = None
 
-    d_input = 38 # From dataset
-    d_output = 8 # From dataset
+    d_input = service_count # From dataset
+    d_output = service_count # From dataset
 
     # Config
     sns.set()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device {device}")
 
+    
     net = Transformer(d_input, d_model, d_output, q, v, h, N, attention_size=attention_size, dropout=dropout, chunk_mode=chunk_mode, pe=pe).to(device)
     optimizer = optim.Adam(net.parameters(), lr=LR)
-    loss_function = OZELoss(alpha=0.3)
+    loss_function = nn.MSELoss()
 
     return net, optimizer, loss_function, device
 
@@ -84,8 +83,8 @@ def Train():
     model_save_path = f'models/model_{datetime.datetime.now().strftime("%Y_%m_%d__%H%M%S")}.pth'
     val_loss_best = np.inf
 
-    net, optimizer, loss_function, device = LoadNetwork()
-    dataloader_train, dataloader_val, _ = LoadDataset()
+    dataloader_train, dataloader_val, _, service_count = LoadDataset()
+    net, optimizer, loss_function, device = LoadNetwork(service_count)
 
     # Prepare loss history
     hist_loss = np.zeros(EPOCHS)
