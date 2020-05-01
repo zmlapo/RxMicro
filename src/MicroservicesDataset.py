@@ -42,6 +42,7 @@ class MicroservicesDataset(Dataset):
         for filename in os.listdir(dataset_path):
             data_path = os.path.join(dataset_path, filename)
             data = np.loadtxt(data_path, usecols=(4, 5))
+            data = data.astype(int)
             uniques = np.unique(data[:, 0], return_counts=True)[1]
             times = np.unique(data[:, 0], return_counts=True)[0]
 
@@ -52,22 +53,23 @@ class MicroservicesDataset(Dataset):
 
             cumulative = np.cumsum(uniques)
             split_values = np.split(data[:, 1], cumulative[:-1])
-            split_values_averaged = [sum(vals)/len(vals) for vals in split_values]
+            split_values_averaged = [int(sum(vals)/len(vals)) for vals in split_values]
             latencies_by_second = np.column_stack((times, split_values_averaged))
             latencies_by_second = self._normalize(latencies_by_second)
             data_arr.append(latencies_by_second)
             num_services += 1
             
-        print(num_services)
-        print(data_arr)
+        #print(num_services)
+        #print(data_arr)
         self.service_count = num_services
         data_master = self._construct_master(global_min, global_max, num_services, data_arr)
 
 
         labels_arr = []
         for filename in os.listdir(labels_path):
-            labels_path = os.path.join(labels_path, filename)
-            labels = np.loadtxt(data_path, usecols=(4, 5, 6))
+            label_path = os.path.join(labels_path, filename)
+            labels = np.loadtxt(label_path, usecols=(4, 5, 6))
+            labels = labels.astype(int)
             uniques = np.unique(labels[:, 0], return_counts=True)[1]
             times = np.unique(labels[:, 0], return_counts=True)[0]
 
@@ -79,56 +81,52 @@ class MicroservicesDataset(Dataset):
             ###     global_max = max(times)
 
             cumulative = np.cumsum(uniques)
-            congested_split_values = np.split(labels[:, 1], cumulative[:-1])
+            #congested_split_values = np.split(labels[:, 1], cumulative[:-1])
             receiver_split_values = np.split(labels[:, 2], cumulative[:-1])
-            congested_split_values_avg = [sum(vals)/len(vals) for vals in congested_split_values]
+            #congested_split_values_avg = [sum(vals)/len(vals) for vals in congested_split_values]
             receiver_split_values_avg = [sum(vals)/len(vals) for vals in receiver_split_values]
-            receiver_by_second = np.column_stack((times, congested_split_values_avg))
-            congested_and_receiver_by_second = p.column_stack((receiver_by_second, receiver_split_values_avg))
-            labels_by_second_normalized = self._normalize(congested_and_receiver_by_second)
+            receiver_by_second = np.column_stack((times, receiver_split_values_avg))
+            #congested_and_receiver_by_second = np.column_stack((receiver_by_second, receiver_split_values_avg))
+            labels_by_second_normalized = self._normalize(receiver_by_second)
+            print("===========================")
+            print(labels_by_second_normalized)
             labels_arr.append(labels_by_second_normalized)
             
-        label_master = self._construct_master(global_min, global_max, num_services, data_arr, labels=True)
+        label_master = self._construct_master(global_min, global_max, num_services, labels_arr)
 
         # Convert to float32
         self._x = torch.Tensor(data_master)
         self._y = torch.Tensor(label_master)
 
 
-    def _construct_master(self, global_min, global_max, num_services, data_arr, labels=False):        
-        time_range = self._add_to_time_range(global_min, global_max, num_services, data_arr, labels)
-        if labels:
-            time_range = self._interpolate(time_range)
-        else:
-            time_range = self._interpolate_latencies(time_range)
+    def _construct_master(self, global_min, global_max, num_services, _arr):        
+        time_range = self._add_to_time_range(global_min, global_max, num_services, _arr)
+        time_range = self._interpolate_latencies(time_range)
 
         return time_range
 
 
     ### Removes t values, so that time is implicit in array position
-    def _add_to_time_range(self, global_min, global_max, num_services, data_arr, labels):
-        time_range = [[] for i in range(global_min, global_max)]
+    def _add_to_time_range(self, global_min, global_max, num_services, data_arr):
+        time_range = np.zeros([global_max - global_min, num_services])
         for i in range(num_services):
-            serv_data = np.array(data_arr[i])
+            serv_data = data_arr[i]
+            #print(serv_data)
             for j in range(global_min, global_max):
                 ### serv_data only has data for some timesteps
                 if j in serv_data[:, 0]:
                     idx = np.where(serv_data[:, 0] == j)
-                    if labels:
-                        time_range[j - global_min].append([serv_data[idx, 1], serv_data[idx, 2]])
-                    else:
-                        print(global_max)
-                        print(j)
-                        print(len(time_range))
-                        time_range[j - global_min].append(serv_data[idx, 1])
+                    #print(global_max)
+                    #print(j)
+                    #print(len(time_range))
+                    time_range[j - global_min] = serv_data[idx, 1]
                 else: 
-                    if labels:
-                        time_range[j - global_min].append([-1, -1])
-                    else:
-                        time_range[j - global_min].append(-1)
+                    time_range[j - global_min, i] = -1
+        print(time_range)
+        print(time_range.shape)
         return time_range
 
-    def _interpolate_latencies(self, time_range):
+    def _interpolate(self, time_range):
         time_range = np.array(time_range)
         for j in range(time_range.shape[1]):
             ### Value
@@ -149,6 +147,7 @@ class MicroservicesDataset(Dataset):
                         zero_start = i
                         interpolated.append(0)
                 else:
+                    print(time_range[i, j])
                     if time_range[i, j] != 0:
                         first_non_zero = time_range[i, j]
                         ### Because indexing is exclusive, we have zero end be the index of the first nonzero value
@@ -179,8 +178,9 @@ class MicroservicesDataset(Dataset):
             interpolated = []
             ### Value
             first_non_zero = [0, 0]
-            for i in time_range.shape[0]:
+            for i in range(time_range.shape[0]):
                 if len(interpolated) == 0:
+                    print(time_range[i, j])
                     if time_range[i, j] != [-1, -1]:
                         last_non_zero = time_range[i, j]
                     else:
@@ -205,7 +205,7 @@ class MicroservicesDataset(Dataset):
 
 
     def _normalize(self, data):
-        times = [int(x[0]) for x in data]
+        times = data[:, 0]
         ### This can already handle multiple columns
         for i in range(1, data.shape[1]):
             col = data[:, i]
