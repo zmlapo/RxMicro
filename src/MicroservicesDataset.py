@@ -1,4 +1,4 @@
-`import json
+import json
 from typing import Optional
 
 import numpy as np
@@ -7,9 +7,8 @@ import torch
 import os
 
 
-class OzeDataset(Dataset):
-    """Torch dataset for Oze datachallenge.
-    Load dataset from a single npz file.
+class MicroservicesDataset(Dataset):
+    """
     Attributes
     ----------
     labels: :py:class:`dict`
@@ -30,7 +29,6 @@ class OzeDataset(Dataset):
                  dataset_path: str,
                  labels_path: str,
                  **kwargs):
-        """Load dataset from npz."""
         super().__init__(**kwargs)
 
         self._load_txt(dataset_path, labels_path)
@@ -71,7 +69,7 @@ class OzeDataset(Dataset):
             uniques = np.unique(labels[:, 0], return_counts=True)[1]
             times = np.unique(labels[:, 0], return_counts=True)[0]
 
-            ### We don't want to recalculate min and max here. Not necessary
+            ### We don't want to recalculate min and max here. Not necessary.
 
             ### if global_min > min(times) or global_min == 0:
             ###     global_min = min(times)
@@ -80,7 +78,7 @@ class OzeDataset(Dataset):
 
             cumulative = np.cumsum(uniques)
             congested_split_values = np.split(labels[:, 1], cumulative[:-1])
-            receiver_split_values = np.split(labels:, 2], cumulative[:-1])
+            receiver_split_values = np.split(labels[:, 2], cumulative[:-1])
             congested_split_values_avg = [sum(vals)/len(vals) for vals in congested_split_values]
             receiver_split_values_avg = [sum(vals)/len(vals) for vals in receiver_split_values]
             receiver_by_second = np.column_stack((times, congested_split_values_avg))
@@ -95,23 +93,109 @@ class OzeDataset(Dataset):
         self._y = torch.Tensor(label_master)
 
 
-    def _construct_master(self, global_min, global_max, num_services, data_arr, labels=False):
+    def _construct_master(self, global_min, global_max, num_services, data_arr, labels=False):        
+        time_range = self._add_to_time_range(global_min, global_max, num_services, data_arr, labels)
+        if labels:
+            time_range = self._interpolate(time_range)
+        else:
+            time_range = self._interpolate_latencies(time_range)
+
+        return time_range
+
+
+    ### Removes t values, so that time is implicit in array position
+    def _add_to_time_range(self, global_min, global_max, num_services, data_arr, labels):
         time_range = [[] for i in range(global_min, global_max)]
         for i in range(num_services):
-            serv_data = data_arr[i]
+            serv_data = np.array(data_arr[i])
             for j in range(global_min, global_max):
+                ### serv_data only has data for some timesteps
                 if j in serv_data[:, 0]:
                     idx = serv_data[:, 0].index(j)
-                    time_range[global_max - j].append(serv_data[idx, 1])
-                    ### Second value representing Receiver Window
                     if labels:
-                        time_range[global_max - j].append(serv_data[idx, 2])
+                        time_range[global_max - j].append([serv_data[idx, 1], serv_data[idx, 2]])
+                    else:
+                        time_range[global_max - j].append(serv_data[idx, 1])
                 else: 
-                    time_range[global_max - j].append(0)
-                    ### Second 0 representing Receiver Window
                     if labels:
-                        time_range[global_max - j].append(0)
+                        time_range[global_max - j].append([-1, -1])
+                    else:
+                        time_range[global_max - j].append(-1)
+        return time_range
 
+    def _interpolate_latencies(self, time_range):
+        time_range = np.array(time_range)
+        for j in time_range.shape[1]:
+            ### Value
+            last_non_zero = 0
+            ### Index
+            zero_start = 0
+            ### Index
+            zero_end = 0
+            ### Values
+            interpolated = []
+            ### Value
+            first_non_zero = 0
+            for i in time_range.shape[0]:
+                if len(interpolated) == 0:
+                    if time_range[i, j] != -1:
+                        last_non_zero = time_range[i, j]
+                    else:
+                        zero_start = i
+                        interpolated.append(0)
+                else:
+                    if time_range[i, j] != 0:
+                        first_non_zero = time_range[i, j]
+                        ### Because indexing is exclusive, we have zero end be the index of the first nonzero value
+                        ### Add 1 to len(interpolated) because that is the number of 'hops' from last_non_zero to first_non_zero
+                        zero_end = i
+                        incr = (first_non_zero - last_non_zero) / (len(interpolated) + 1)
+                        last_val = last_non_zero
+                        for x in range(len(interpolated)):
+                            interpolated[x] = last_val + incr
+                            last_val = interpolated[x]
+                        time_range[zero_start:zero_end, j] = interpolated
+                        interpolated = []
+                    else:
+                        interpolated.append(0)
+        return time_range
+
+    
+    def _interpolate_windows(self, time_range):
+        time_range = np.array(time_range)
+        for j in time_range.shape[1]:
+            ### Value
+            last_non_zero = [0, 0]
+            ### Index
+            zero_start = 0
+            ### Index
+            zero_end = 0
+            ### Values
+            interpolated = []
+            ### Value
+            first_non_zero = [0, 0]
+            for i in time_range.shape[0]:
+                if len(interpolated) == 0:
+                    if time_range[i, j] != [-1, -1]:
+                        last_non_zero = time_range[i, j]
+                    else:
+                        zero_start = i
+                        interpolated.append([0, 0])
+                else:
+                    if time_range[i, j] != [-1, -1]:
+                        first_non_zero = time_range[i, j]
+                        ### Because indexing is exclusive, we have zero end be the index of the first nonzero value
+                        ### Add 1 to len(interpolated) because that is the number of 'hops' from last_non_zero to first_non_zero
+                        zero_end = i
+                        incr = (first_non_zero - last_non_zero) / (len(interpolated) + 1)
+                        last_val = last_non_zero
+                        for x in range(len(interpolated)):
+                            interpolated[x] = last_val + incr
+                            last_val = interpolated[x]
+                        time_range[zero_start:zero_end, j] = interpolated
+                        interpolated = []
+                    else:
+                        interpolated.append([0, 0])
         return time_range
 
 
@@ -157,4 +241,9 @@ class OzeDataset(Dataset):
     def __len__(self):
         return self._x.shape[0]
 
-`
+
+def main():
+    m = MicroservicesDataset('data/data/', 'data/labels/')
+
+if __name__ == "__main__":
+    main()
