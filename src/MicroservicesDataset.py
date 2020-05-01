@@ -46,9 +46,9 @@ class MicroservicesDataset(Dataset):
             times = np.unique(data[:, 0], return_counts=True)[0]
 
             if global_min > min(times) or global_min == 0:
-                global_min = min(times)
+                global_min = int(min(times))
             if global_max < max(times) or global_max == 0:
-                global_max = max(times)
+                global_max = int(max(times))
 
             cumulative = np.cumsum(uniques)
             split_values = np.split(data[:, 1], cumulative[:-1])
@@ -58,6 +58,8 @@ class MicroservicesDataset(Dataset):
             data_arr.append(latencies_by_second)
             num_services += 1
             
+        print(num_services)
+        print(data_arr)
         self.service_count = num_services
         data_master = self._construct_master(global_min, global_max, num_services, data_arr)
 
@@ -111,21 +113,24 @@ class MicroservicesDataset(Dataset):
             for j in range(global_min, global_max):
                 ### serv_data only has data for some timesteps
                 if j in serv_data[:, 0]:
-                    idx = serv_data[:, 0].index(j)
+                    idx = np.where(serv_data[:, 0] == j)
                     if labels:
-                        time_range[global_max - j].append([serv_data[idx, 1], serv_data[idx, 2]])
+                        time_range[j - global_min].append([serv_data[idx, 1], serv_data[idx, 2]])
                     else:
-                        time_range[global_max - j].append(serv_data[idx, 1])
+                        print(global_max)
+                        print(j)
+                        print(len(time_range))
+                        time_range[j - global_min].append(serv_data[idx, 1])
                 else: 
                     if labels:
-                        time_range[global_max - j].append([-1, -1])
+                        time_range[j - global_min].append([-1, -1])
                     else:
-                        time_range[global_max - j].append(-1)
+                        time_range[j - global_min].append(-1)
         return time_range
 
     def _interpolate_latencies(self, time_range):
         time_range = np.array(time_range)
-        for j in time_range.shape[1]:
+        for j in range(time_range.shape[1]):
             ### Value
             last_non_zero = 0
             ### Index
@@ -136,7 +141,7 @@ class MicroservicesDataset(Dataset):
             interpolated = []
             ### Value
             first_non_zero = 0
-            for i in time_range.shape[0]:
+            for i in range(time_range.shape[0]):
                 if len(interpolated) == 0:
                     if time_range[i, j] != -1:
                         last_non_zero = time_range[i, j]
@@ -163,7 +168,7 @@ class MicroservicesDataset(Dataset):
     
     def _interpolate_windows(self, time_range):
         time_range = np.array(time_range)
-        for j in time_range.shape[1]:
+        for j in range(time_range.shape[1]):
             ### Value
             last_non_zero = [0, 0]
             ### Index
@@ -243,7 +248,7 @@ class MicroservicesDataset(Dataset):
 
 
 def main():
-    m = MicroservicesDataset('data/data/', 'data/labels/')
+    m = MicroservicesDataset('../data/data/', '../data/labels/')
 
 if __name__ == "__main__":
     main()
