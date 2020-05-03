@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from tst.encoder import Encoder
 from tst.decoder import Decoder
-from conv.cnn import ConvNet
+#from conv.cnn import ConvNet
 from tst.utils import generate_original_PE, generate_regular_PE
 
 

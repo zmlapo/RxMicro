@@ -11,13 +11,14 @@ import seaborn as sns
 
 from tst import Transformer
 
-from src.dataset import MicroservicesDataset
+from src import MicroservicesDataset
 from src.utils import compute_loss
 from src.visualization.plot_functions import plot_error_distribution, plot_values_distribution, plot_visual_sample
 
 
 # Training parameters
-DATASET_PATH = 'datasets/dataset_CAPT_v7.npz'
+DATASET_PATH = '../data/data/'
+LABELS_PATH = '../data/labels/'
 BATCH_SIZE = 8
 NUM_WORKERS = 4
 LR = 2e-4
@@ -25,7 +26,7 @@ EPOCHS = 30
 
 
 def LoadDataset():
-    microservicesDataset = MicroservicesDataset(DATASET_PATH)
+    microservicesDataset = MicroservicesDataset.MicroservicesDataset(DATASET_PATH, LABELS_PATH)
 
     dataset_train, dataset_val, dataset_test = random_split(microservicesDataset, (38000, 1000, 1000))
 
@@ -122,3 +123,10 @@ def Train():
     plt.plot(hist_loss_val, 'o-', label='val')
     plt.legend()
     print(f"model exported to {model_save_path} with loss {val_loss_best:5f}")
+
+def main():
+    Train()
+
+if __name__ == "__main__":
+    main()
+

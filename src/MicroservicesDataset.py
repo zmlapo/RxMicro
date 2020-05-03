@@ -93,11 +93,13 @@ class MicroservicesDataset(Dataset):
             labels_arr.append(receiver_by_second)
             
         label_master = self._construct_master(global_min, global_max, num_services, labels_arr)
-
+        
         ### For every latency datapoint at time t, the label is receiver window data at time t+1
         shifted_data = data_master[:-1,:]
         shifted_labels = label_master[1:,:]
-
+        
+        print(shifted_data.shape)
+        print(shifted_labels.shape)
         # Convert to float32
         self._x = torch.Tensor(shifted_data)
         self._y = torch.Tensor(shifted_labels)
@@ -127,6 +129,7 @@ class MicroservicesDataset(Dataset):
                     time_range[j - global_min, i] = -1
         return time_range
 
+    ### last_non_zero and first_non_zero represent values other than -1, which represent missing latencies
     def _interpolate(self, time_range):
         time_range = np.array(time_range)
         for j in range(time_range.shape[1]):
@@ -148,7 +151,7 @@ class MicroservicesDataset(Dataset):
                         zero_start = i
                         interpolated.append(0)
                 else:
-                    if time_range[i, j] != 0:
+                    if time_range[i, j] != -1:
                         first_non_zero = time_range[i, j]
                         ### Because indexing is exclusive, we have zero end be the index of the first nonzero value
                         ### Add 1 to len(interpolated) because that is the number of 'hops' from last_non_zero to first_non_zero
@@ -165,9 +168,19 @@ class MicroservicesDataset(Dataset):
                         time_range[zero_start:zero_end, j] = interpolated
                         #print("~~~~~~~~")
                         #print(time_range[zero_start:zero_end, j])
+                        last_non_zero = time_range[i, j]
                         interpolated = []
                     else:
                         interpolated.append(0)
+                if i == time_range.shape[0] - 1:
+                    if len(interpolated) != 0:
+                        for x in range(len(interpolated)):
+                            interpolated[x] = last_non_zero
+                        time_range[zero_start:, j] = interpolated
+                    else:
+                        if time_range[i, j] == -1:
+                            time_range[i, j] = last_non_zero
+
         return time_range
 
 
