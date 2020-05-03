@@ -20,8 +20,8 @@ class ConvNet(nn.Module):
         out = self.layer1(x)
         out = self.layer2(out)
         ### This doesn't rehsape to [1, w * h * ch]
-        out = out.reshape(out.size(0), -1)
         out = self.drop_out(out)
+        out = self.flatten(out)
         return out
 
 

@@ -68,7 +68,7 @@ class Transformer(nn.Module):
 
         self._d_model = d_model
 
-        self._conv = ConvNet()
+        #self._conv = ConvNet()
         self.layers_encoding = nn.ModuleList([Encoder(d_model,
                                                       q,
                                                       v,

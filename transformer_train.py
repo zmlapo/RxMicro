@@ -31,14 +31,14 @@ def LoadDataset():
 
     dataloader_train = DataLoader(dataset_train,
                                 batch_size=BATCH_SIZE,
-                                shuffle=True,
+                                shuffle=False,
                                 num_workers=NUM_WORKERS,
                                 pin_memory=False
                                 )
 
     dataloader_val = DataLoader(dataset_val,
                                 batch_size=BATCH_SIZE,
-                                shuffle=True,
+                                shuffle=False,
                                 num_workers=NUM_WORKERS
                             )
 
@@ -60,7 +60,7 @@ def LoadNetwork(service_count):
     N = 4 # Number of encoder and decoder to stack
     attention_size = 24 # Attention window size
     dropout = 0.2 # Dropout rate
-    pe = None # Positional encoding
+    pe = 'original' # Positional encoding
     chunk_mode = None
 
     d_input = service_count # From dataset
@@ -71,7 +71,7 @@ def LoadNetwork(service_count):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device {device}")
 
-    
+
     net = Transformer(d_input, d_model, d_output, q, v, h, N, attention_size=attention_size, dropout=dropout, chunk_mode=chunk_mode, pe=pe).to(device)
     optimizer = optim.Adam(net.parameters(), lr=LR)
     loss_function = nn.MSELoss()
