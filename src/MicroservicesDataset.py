@@ -107,6 +107,7 @@ class MicroservicesDataset(Dataset):
         time_range = self._add_to_time_range(global_min, global_max, num_services, _arr)
         time_range = self._interpolate(time_range)
 
+        print(time_range)
         return time_range
 
 
@@ -121,14 +122,9 @@ class MicroservicesDataset(Dataset):
                 ### serv_data only has data for some timesteps
                 if j in serv_data[:, 0]:
                     idx = np.where(serv_data[:, 0] == j)
-                    #print(global_max)
-                    #print(j)
-                    #print(len(time_range))
                     time_range[j - global_min, i] = serv_data[idx, 1]
                 else: 
                     time_range[j - global_min, i] = -1
-        print(time_range)
-        print(time_range.shape)
         return time_range
 
     def _interpolate(self, time_range):
@@ -153,7 +149,6 @@ class MicroservicesDataset(Dataset):
                         interpolated.append(0)
                 else:
                     if time_range[i, j] != 0:
-                        #print(time_range[i, j])
                         first_non_zero = time_range[i, j]
                         ### Because indexing is exclusive, we have zero end be the index of the first nonzero value
                         ### Add 1 to len(interpolated) because that is the number of 'hops' from last_non_zero to first_non_zero
