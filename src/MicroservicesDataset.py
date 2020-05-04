@@ -98,7 +98,7 @@ class MicroservicesDataset(Dataset):
         
         ### For every latency datapoint at time t, the label is receiver window data at time t+1
         shifted_data = data_master[:-2,:]
-        #shifted_labels = label_master[1:-1,:]
+        #shifted_data = label_master[:-2,:]
         shifted_labels = data_master[1:-1, :]
         
         normalized_data = self._normalize(shifted_data)
