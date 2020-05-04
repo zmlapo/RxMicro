@@ -30,7 +30,7 @@ class MicroservicesDataset(Dataset):
                  labels_path: str,
                  **kwargs):
         super().__init__(**kwargs)
-
+        
         self._load_txt(dataset_path, labels_path)
 
     def _load_txt(self, dataset_path, labels_path):
@@ -39,6 +39,8 @@ class MicroservicesDataset(Dataset):
         global_min = 0
         global_max = 0
         num_services = 0
+        for filen in os.listdir():
+            print(filen)
         for filename in os.listdir(dataset_path):
             print(filename)
             data_path = os.path.join(dataset_path, filename)
@@ -95,14 +97,18 @@ class MicroservicesDataset(Dataset):
         label_master = self._construct_master(global_min, global_max, num_services, labels_arr)
         
         ### For every latency datapoint at time t, the label is receiver window data at time t+1
-        shifted_data = data_master[:-1,:]
-        shifted_labels = label_master[1:,:]
+        shifted_data = data_master[:-2,:]
+        #shifted_labels = label_master[1:-1,:]
+        shifted_labels = data_master[1:-1, :]
         
-        print(shifted_data.shape)
-        print(shifted_labels.shape)
+        normalized_data = self._normalize(shifted_data)
+        normalized_labels = self._normalize(shifted_labels)
+        
+        #print(shifted_data.shape)
+        #print(shifted_labels.shape)
         # Convert to float32
-        self._x = torch.Tensor(shifted_data)
-        self._y = torch.Tensor(shifted_labels)
+        self._x = torch.reshape(torch.Tensor(normalized_data), (258, 5, 6))
+        self._y = torch.reshape(torch.Tensor(normalized_labels), (258, 5, 6))
 
 
     def _construct_master(self, global_min, global_max, num_services, _arr):        
@@ -185,15 +191,13 @@ class MicroservicesDataset(Dataset):
 
 
     def _normalize(self, data):
-        times = data[:, 0]
         ### This can already handle multiple columns
         for i in range(1, data.shape[1]):
             col = data[:, i]
             mean = np.mean(col)
             std = np.std(col)
-            values = (col - mean) / (std + np.finfo(float).eps)
-            times = np.column_stack((times, values))
-        return times
+            data[:, i] = (data[:, i] - mean) / (std + np.finfo(float).eps)
+        return data
 
     def rescale(self,
                 y: np.ndarray,

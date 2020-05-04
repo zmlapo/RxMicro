@@ -85,7 +85,7 @@ class Transformer(nn.Module):
                                                       chunk_mode=chunk_mode) for _ in range(N)])
         self._embedding = nn.Linear(d_input, d_model)
         self._linear = nn.Linear(d_model, d_output)
-
+        self._softmax = nn.Softmax(1)
         pe_functions = {
             'original': generate_original_PE,
             'regular': generate_regular_PE,
@@ -143,5 +143,5 @@ class Transformer(nn.Module):
 
         # Output module
         output = self._linear(decoding)
-        output = torch.softmax(output)
+        #output = self._softmax(output)
         return output

@@ -17,18 +17,18 @@ from src.visualization.plot_functions import plot_error_distribution, plot_value
 
 
 # Training parameters
-DATASET_PATH = '../data/data/'
-LABELS_PATH = '../data/labels/'
+DATASET_PATH = 'data/data/'
+LABELS_PATH = 'data/labels/'
 BATCH_SIZE = 8
 NUM_WORKERS = 4
 LR = 2e-4
-EPOCHS = 30
+EPOCHS = 200
 
 
 def LoadDataset():
     microservicesDataset = MicroservicesDataset.MicroservicesDataset(DATASET_PATH, LABELS_PATH)
 
-    dataset_train, dataset_val, dataset_test = random_split(microservicesDataset, (38000, 1000, 1000))
+    dataset_train, dataset_val, dataset_test = random_split(microservicesDataset, (230, 14, 14))
 
     dataloader_train = DataLoader(dataset_train,
                                 batch_size=BATCH_SIZE,
@@ -111,7 +111,7 @@ def Train():
         
         train_loss = running_loss/len(dataloader_train)
         val_loss = compute_loss(net, dataloader_val, loss_function, device).item()
-        
+        print(train_loss)
         hist_loss[idx_epoch] = train_loss
         hist_loss_val[idx_epoch] = val_loss
         
@@ -122,6 +122,7 @@ def Train():
     plt.plot(hist_loss, 'o-', label='train')
     plt.plot(hist_loss_val, 'o-', label='val')
     plt.legend()
+    plt.show()
     print(f"model exported to {model_save_path} with loss {val_loss_best:5f}")
 
 def main():
