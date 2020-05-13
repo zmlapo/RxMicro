@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from tst.encoder import Encoder
 from tst.decoder import Decoder
-#from conv.cnn import ConvNet
+from conv.cnn import ConvNet
 from tst.utils import generate_original_PE, generate_regular_PE
 
 
@@ -114,11 +114,13 @@ class Transformer(nn.Module):
         -------
             Output tensor with shape (batch_size, K, d_output).
         """
-        K = x.shape[1]
 
+        #x = self._conv(x)
+        #print(x.shape)
+        K = x.shape[1]
         # Embeddin module
         encoding = self._embedding(x)
-
+        
         # Add position encoding
         if self._generate_PE is not None:
             positional_encoding = self._generate_PE(K, self._d_model)

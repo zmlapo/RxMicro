@@ -22,13 +22,13 @@ LABELS_PATH = 'data/labels/'
 BATCH_SIZE = 8
 NUM_WORKERS = 4
 LR = 2e-4
-EPOCHS = 200
+EPOCHS = 1000
 
 
 def LoadDataset():
     microservicesDataset = MicroservicesDataset.MicroservicesDataset(DATASET_PATH, LABELS_PATH)
 
-    dataset_train, dataset_val, dataset_test = random_split(microservicesDataset, (230, 14, 14))
+    dataset_train, dataset_val, dataset_test = random_split(microservicesDataset, (720, 44, 10))
 
     dataloader_train = DataLoader(dataset_train,
                                 batch_size=BATCH_SIZE,
